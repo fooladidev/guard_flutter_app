@@ -1,21 +1,35 @@
 
 import 'dart:io';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:project2_app/constants.dart';
+import 'package:project2_app/screens/app_home.dart';
 import 'package:qr_code_scanner/qr_code_scanner.dart';
 
 class ScanQr extends StatefulWidget {
+  final Map data ;
+  final String? locString ;
+
+  const ScanQr({Key? key,required this.data, this.locString}) : super(key: key);
+
   @override
-  State<StatefulWidget> createState() => _ScanQrState();
+  State<StatefulWidget> createState() => _ScanQrState(data,locString);
 }
 
+
 class _ScanQrState extends State<ScanQr> {
+  final Map data ;
+  final String? locString ;
+  ElevatedButton? elevatedButton ;
   Barcode? result;
   QRViewController? controller;
+  late BuildContext context01;
   final GlobalKey qrKey = GlobalKey(debugLabel: 'QR');
+
+  _ScanQrState(this.data,this.locString);
 
   // In order to get hot reload to work we need to pause the camera if the platform
   // is android, or resume the camera if the platform is iOS.
@@ -28,8 +42,11 @@ class _ScanQrState extends State<ScanQr> {
     controller!.resumeCamera();
   }
 
+
   @override
   Widget build(BuildContext context) {
+    context01=context;
+
     return Scaffold(
       body: Column(
         children: <Widget>[
@@ -42,43 +59,6 @@ class _ScanQrState extends State<ScanQr> {
               child: Directionality(textDirection: TextDirection.rtl,child: Column(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: <Widget>[
-
-                  if (result != null)
-                    Column(
-                      children: [
-                        Text("QR کد اسکن شد",style: TextStyle(fontSize: 20,fontFamily: 'IranSans',fontWeight: FontWeight.w800),),
-                        Row(
-                          children: [
-                            Container(
-                              margin: EdgeInsets.only(left: 5,right: 5),
-                              child: ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                      primary: KPrimaryColor
-                                  ),
-                                  onPressed: (){
-                                    Navigator.pop(context,result?.code);
-                                  }, child:Text("ادامه دادن",style: TextStyle(fontSize: 17,fontWeight: FontWeight.w600)) ),
-                            ),
-                            Container(
-                              margin: EdgeInsets.only(left: 5,right: 5),
-                              child:ElevatedButton(
-                                  style: ElevatedButton.styleFrom(
-                                      primary: KPrimaryColor
-                                  ),
-                                  onPressed: (){
-                                    setState(() {
-                                      result=null;
-                                    });
-                                  }, child:Text("اسکن مجدد",style: TextStyle(fontSize: 17,fontWeight: FontWeight.w600)) ),
-                            )
-
-                          ],
-                        )
-                      ],
-                    )
-
-                  else
-                    Text('لطفا کد QR را اسکن کنید',style: TextStyle(fontSize: 20,fontFamily: 'IranSans',fontWeight: FontWeight.w800)),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.center,
@@ -159,16 +139,117 @@ class _ScanQrState extends State<ScanQr> {
     setState(() {
       this.controller = controller;
     });
+
     controller.scannedDataStream.listen((scanData) {
       setState(() {
         result = scanData;
       });
+      this.controller?.pauseCamera();
+      sendreq1();
     });
+
   }
 
   @override
   void dispose() {
     controller?.dispose();
     super.dispose();
+  }
+
+  Future<void> sendreq1()async {
+    BaseOptions options = new BaseOptions(
+      connectTimeout: 7000,
+      receiveTimeout: 7000,
+      baseUrl: "guard.poriazarei.ir",
+    );
+    Dio dio =Dio(options);
+    Response response ;
+    print(12);
+
+
+    try{
+      response = await dio.post("http://guard.poriazarei.ir/api/v1/guard/scan",data: {'_token':data['token'],'scanData':result?.code,'location':locString});
+      print(13);
+      if(response.data["data"]["status"].toString().contains("true")){
+        // getShifts();
+        showDialog(
+            barrierDismissible: false,
+            context: context, builder: (context)=> AlertDialog(
+          content: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+
+            children: [
+              Text("عملیات موفقیت آمیز بود",style: TextStyle(fontFamily: "IranSans",fontSize: 16),),
+              Container(
+                margin: EdgeInsets.only(left: 7),
+                child: Icon(Icons.check,color: Colors.lightGreen,),
+              ),
+
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                primary: KPrimaryColor,
+              ),
+              onPressed: (){
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              child: Text("برگشت"),
+            ),
+
+          ],
+
+        ));
+
+      }
+      else{
+        showDialog(barrierDismissible: false,context: context, builder: (context)=> AlertDialog(
+          content: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+
+            children: [
+              Text(response.data['data']["message"],style: TextStyle(fontFamily: "IranSans",fontSize: 16),),
+              Container(
+                margin: EdgeInsets.only(left: 16),
+                child: Icon(Icons.cancel_outlined,color: Colors.red,),
+              ),
+
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                primary: KPrimaryColor,
+              ),
+              onPressed: (){
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+              child: Text("برگشت"),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                primary: KPrimaryColor,
+              ),
+              onPressed: (){
+                Navigator.pop(context);
+                this.controller?.resumeCamera();
+
+              },
+              child: Text("سعی مجدد"),
+            ),
+
+          ],
+        ));
+      }
+
+
+
+    }on DioError catch(e){
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(duration:Duration(milliseconds: 3000),content: Text("نتوانستیم اطلاعات را بفرستیم.مجدد سعی کنید")));
+
+    }
   }
 }

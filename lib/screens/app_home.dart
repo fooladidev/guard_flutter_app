@@ -23,15 +23,19 @@ class _AppHomeState extends State<AppHome> with SingleTickerProviderStateMixin {
   late LocationData locationData ;
   List<dynamic>? shifts ;
   bool isSendBtnPressed =false;
+  bool isReTrygetLoc =false;
+  bool reloadLoc= false ;
 
 
-  String? qrData;
   String? locString;
 
   _AppHomeState(this.data);
 
 
-  Future<LocationData> getLocation() async {
+  Future<void> getLocation() async {
+
+
+
     Location location = new Location();
 
     bool _serviceEnabled;
@@ -53,17 +57,31 @@ class _AppHomeState extends State<AppHome> with SingleTickerProviderStateMixin {
       }
     }
 
-    _locationData = await location.getLocation();
-    setState(() {
-      locationData=_locationData;
-      locString=_locationData.latitude.toString()+","+_locationData.longitude.toString();
 
-    });
-    return _locationData ;
+    if(_serviceEnabled && _permissionGranted == PermissionStatus.granted){
+      setState(() {
+        reloadLoc=true ;
+
+      });
+
+      _locationData = await location.getLocation();
+
+      setState(() {
+        reloadLoc = false ;
+        locationData=_locationData;
+        locString=_locationData.latitude.toString()+","+_locationData.longitude.toString();
+
+      });
+    }
+
+
   }
 
   late AnimationController animationController;
   late Animation rotateAnim;
+
+  // late AnimationController locAnimationController;
+  // late Animation locRotateAnim;
 
 
   @override
@@ -137,6 +155,27 @@ class _AppHomeState extends State<AppHome> with SingleTickerProviderStateMixin {
                       ),
                     ),
                   ),
+                  reloadLoc
+                    ? Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        margin: EdgeInsets.only(left: 5,),
+
+                        child: Text("لطفا منتظر بمانید",style:TextStyle(fontFamily: 'IranSans',fontSize: 18),),
+                      ),
+                      CircularProgressIndicator(
+                          valueColor: new AlwaysStoppedAnimation<Color>(KPrimaryColor))
+                    ],
+                  )
+                    :
+
+                  // AnimatedBuilder(
+                  //   animation: animationController,
+                  //   builder: (context,widget){
+                  //     return Transform.rotate(angle: rotateAnim.value,child: Icon(Icons.refresh,size: 16,color: Colors.white,),);
+                  //   },
+                  // ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
@@ -152,79 +191,68 @@ class _AppHomeState extends State<AppHome> with SingleTickerProviderStateMixin {
                               Icon(Icons.check_circle_outline,color: Colors.lightGreen,)
 
                             else
-                              Icon(Icons.cancel_outlined,color: Colors.red,)
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+
+                                children: [
+                                  Container(
+                                    margin: EdgeInsets.only(left: 15),
+
+                                    child: Icon(Icons.cancel_outlined,color: Colors.red,),
+                                  ),
+                                  ElevatedButton(
+
+                                    style: ElevatedButton.styleFrom(
+                                        primary: KPrimaryColor,
+                                        padding: EdgeInsets.symmetric(vertical: 6,horizontal: 5)
+                                    ),
+                                    onPressed: isReTrygetLoc ? null : () {
+                                      getLocation();
+                                      setState(() {
+                                        locString=locString;
+                                        isReTrygetLoc =!isReTrygetLoc ;
+                                      });
+                                      Timer(Duration(seconds: 7),(){
+                                        setState(() {
+                                          isReTrygetLoc=!isReTrygetLoc ;
+                                        });
+                                      });
+
+                                    },
+
+
+                                    child: Text("تلاش مجدد",style: TextStyle(fontSize: 12),),
+
+                                  ),
+                                ],
+                              )
+
+
 
                           ],
                         ),
                       ),
-                      Container(
-                        margin: EdgeInsets.only(top:4,bottom: 8,left: 10,right: 18),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
 
-                          children: [
-                            Text("اسکن QR کد ",style: TextStyle(fontFamily:'IranSans',fontSize: 18)),
-                            if(qrData!=null)
-                              Icon(Icons.check_circle_outline,color: Colors.lightGreen,)
-                            else
-                              Icon(Icons.cancel_outlined,color: Colors.red,)
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                   Container(
                     margin: EdgeInsets.symmetric(vertical: 10,horizontal: 8),
                     child: ElevatedButton(
+
                       style: ElevatedButton.styleFrom(
                           primary: KPrimaryColor,
                           padding: EdgeInsets.symmetric(vertical: 6,horizontal: 25)
                       ),
-                      onPressed: ()async {
-                        String res= await Navigator.push(context, MaterialPageRoute(builder: (context)=>ScanQr()));
+                      onPressed: locString==null ? null :()async{
+                        await Navigator.push(context, MaterialPageRoute(builder: (context)=>ScanQr(data: data,locString: locString,)));
+                        getShifts();
                         setState(() {
-                          locString=locString;
-                          qrData=res ;
+
+                            locString=locString;
                         });
-                      },
+                        },
 
                       child: Text("اسکن QR کد",style: TextStyle(fontSize: 16),),
-
-                    ),
-                  ),
-                  Container(
-                    margin: EdgeInsets.symmetric(vertical: 10,horizontal: 8),
-                    child: ElevatedButton(
-                      style: ElevatedButton.styleFrom(
-                          primary: KPrimaryColor,
-                          padding: EdgeInsets.symmetric(vertical: 6,horizontal: 25)
-                      ),
-
-                      onPressed: ()async {
-                        if(!isSendBtnPressed){
-                          if(qrData!=null){
-                            sendreq1();
-                          }
-                          else{
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("نتوانستیم کد را دریافت کنیم")));
-                          }
-                          setState(() {
-                            isSendBtnPressed=!isSendBtnPressed ;
-                          });
-                          Timer(Duration(seconds: 10),(){
-                            setState(() {
-                              isSendBtnPressed=!isSendBtnPressed ;
-                            });
-                          });
-
-                        }
-                        else{
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("لطفا 10 ثانیه بعد امتحان کنید")));
-                        }
-
-                      },
-
-                      child: Text("ارسال اطلاعات",style: TextStyle(fontSize: 16),),
 
                     ),
                   ),
@@ -310,12 +338,10 @@ class _AppHomeState extends State<AppHome> with SingleTickerProviderStateMixin {
                                   else
                                     Icon(Icons.cancel_outlined,color: Colors.red,),
                                   Container(
-                                    width:  size.width*0.3,
+                                    width:  size.width*0.2,
                                     margin:EdgeInsets.symmetric(horizontal: size.width*0.05) ,
                                     child: Text(location['time'].toString()),
                                   ),
-
-
 
                                 ],
                               ),
@@ -354,67 +380,6 @@ class _AppHomeState extends State<AppHome> with SingleTickerProviderStateMixin {
     );
   }
 
-  Future<void> sendreq1()async {
-    BaseOptions options = new BaseOptions(
-      connectTimeout: 7000,
-      receiveTimeout: 7000,
-      baseUrl: "guard.poriazarei.ir",
-    );
-    Dio dio =Dio(options);
-    Response response ;
-
-    try{
-      response = await dio.post("http://guard.poriazarei.ir/api/v1/guard/scan",data: {'_token':data['token'],'scanData':qrData,'location':locString});
-      if(response.data["data"]["status"].toString().contains("true")){
-        getShifts();
-        showDialog(context: context, builder: (context)=> AlertDialog(
-          content: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-
-            children: [
-              Text("عملیات موفقیت آمیز بود",style: TextStyle(fontFamily: "IranSans",fontSize: 16),),
-              Container(
-                margin: EdgeInsets.only(left: 7),
-                child: Icon(Icons.check,color: Colors.lightGreen,),
-              ),
-
-            ],
-          ),
-          actions: [
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                primary: KPrimaryColor,
-              ),
-              onPressed: (){
-                SystemNavigator.pop();
-              },
-              child: Text("خروج از برنامه"),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                primary: KPrimaryColor,
-              ),
-              onPressed: (){
-                Navigator.pop(context);
-
-              },
-              child: Text("ادامه دادن"),
-            ),
-          ],
-        ));
-
-      }
-      else{
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(duration:Duration(milliseconds: 3000),content: Text(response.data['data']["message"])));
-      }
-
-
-
-    }on DioError catch(e){
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(duration:Duration(milliseconds: 3000),content: Text("نتوانستیم اطلاعات را بفرستیم.مجدد سعی کنید")));
-
-    }
-  }
 
   Future<void> getShifts() async {
     BaseOptions options = new BaseOptions(
